@@ -106,6 +106,16 @@ Result pick_folder(fs::path &resulting_path, const fs::path &default_path = "");
  */
 FILE *resolve_host_handle(const fs::path &path);
 
+#ifdef __ANDROID__
+/**
+ * @brief Convert an Android content URI or sandbox path to the actual storage path.
+ *
+ * @param path The original path to resolve.
+ * @return The resolved filesystem path on the device.
+ */
+fs::path resolve_host_path(const fs::path &path);
+#endif
+
 /**
  * @brief Get a string describing the last dialog error
  *

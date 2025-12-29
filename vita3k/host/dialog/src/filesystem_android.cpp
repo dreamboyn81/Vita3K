@@ -176,4 +176,15 @@ FILE *resolve_host_handle(const fs::path &path) {
         return fopen(path.c_str(), "rb");
 }
 
+fs::path resolve_host_path(const fs::path &path) {
+    static const std::string sandbox_prefix = "/mnt/user/0/";
+    static const fs::path real_prefix = "/storage/";
+ 
+    const std::string path_str = fs_utils::path_to_utf8(path);
+    if (path_str.starts_with(sandbox_prefix))
+        return real_prefix / path_str.substr(sandbox_prefix.size());
+
+    return path;
+}
+
 } // namespace host::dialog::filesystem

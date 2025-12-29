@@ -194,39 +194,6 @@ static void get_themes_list(GuiState &gui, EmuEnvState &emuenv) {
     last_updated_themes_list = time(0);
 }
 
-#ifdef __ANDROID__
-bool copy_file_from_host(const fs::path &src, const fs::path &dst) {
-    fs::create_directories(dst.parent_path());
-
-    FILE *infile = host::dialog::filesystem::resolve_host_handle(src);
-    if (!infile) {
-        LOG_ERROR("Failed to open source file: {}", src.string());
-        return false;
-    }
-
-    FILE *outfile = fopen(dst.string().c_str(), "wb");
-    if (!outfile) {
-        LOG_ERROR("Failed to create destination file: {}", dst.string());
-        fclose(infile);
-        return false;
-    }
-
-    constexpr size_t BUFFER_SIZE = 4096;
-    std::vector<uint8_t> buffer(BUFFER_SIZE);
-    size_t bytes_read = 0;
-
-    while ((bytes_read = fread(buffer.data(), 1, BUFFER_SIZE, infile)) > 0) {
-        fwrite(buffer.data(), 1, bytes_read, outfile);
-    }
-
-    fclose(infile);
-    fclose(outfile);
-
-    LOG_INFO("Successfully copied file from {} to {}", src.string(), dst.string());
-    return true;
-}
-#endif
-
 void draw_settings(GuiState &gui, EmuEnvState &emuenv) {
     static std::string selected, title, delete_user_background, delete_theme;
     static ImGuiTextFilter search_bar;
@@ -397,18 +364,6 @@ void draw_settings(GuiState &gui, EmuEnvState &emuenv) {
         ImGui::Separator();
         break;
     case SettingsMenu::THEME_BACKGROUND: {
-#ifdef __ANDROID__
-        const auto remove_image = [&](const std::string &path) {
-            if (!path.empty()) {
-                const fs::path image_path = fs_utils::utf8_to_path(path);
-
-                if (fs::exists(image_path)) {
-                    fs::remove(image_path);
-                    LOG_INFO("image removed: {}", path);
-                }
-            }
-        };
-#endif
         // Themes & Backgrounds
         const auto select = common["select"].c_str();
         switch (menu) {
@@ -510,9 +465,6 @@ void draw_settings(GuiState &gui, EmuEnvState &emuenv) {
                     ImGui::SetWindowFontScale(1.2f);
                     ImGui::SetCursorPos(ImVec2((SIZE_LIST.x / 2.f) - (BUTTON_SIZE.x / 2.f), (SIZE_LIST.y - 82.f) - BUTTON_SIZE.y));
                     if ((selected != gui.users[emuenv.io.user_id].theme_id) && (ImGui::Button(select, BUTTON_SIZE) || ImGui::IsKeyPressed(static_cast<ImGuiKey>(emuenv.cfg.keyboard_button_cross)))) {
-#ifdef __ANDROID__
-                        remove_image(gui.users[emuenv.io.user_id].start_path);
-#endif
                         gui.users[emuenv.io.user_id].start_path.clear();
                         if (init_theme(gui, emuenv, selected)) {
                             gui.users[emuenv.io.user_id].theme_id = selected;
@@ -550,9 +502,6 @@ void draw_settings(GuiState &gui, EmuEnvState &emuenv) {
                     if (ImGui::Button(common["ok"].c_str(), BUTTON_SIZE) || ImGui::IsKeyPressed(static_cast<ImGuiKey>(emuenv.cfg.keyboard_button_cross))) {
                         if (selected == gui.users[emuenv.io.user_id].theme_id) {
                             gui.users[emuenv.io.user_id].theme_id = "default";
-#ifdef __ANDROID__
-                            remove_image(gui.users[emuenv.io.user_id].start_path);
-#endif
                             gui.users[emuenv.io.user_id].start_path.clear();
                             if (init_theme(gui, emuenv, "default"))
                                 gui.users[emuenv.io.user_id].use_theme_bg = true;
@@ -697,9 +646,6 @@ void draw_settings(GuiState &gui, EmuEnvState &emuenv) {
                     }
                     ImGui::SetCursorPos(SELECT_BUTTON_POS);
                     if ((gui.users[emuenv.io.user_id].start_type != "theme") && (ImGui::Button(select, BUTTON_SIZE) || ImGui::IsKeyPressed(static_cast<ImGuiKey>(emuenv.cfg.keyboard_button_cross)))) {
-#ifdef __ANDROID__
-                        remove_image(gui.users[emuenv.io.user_id].start_path);
-#endif
                         gui.users[emuenv.io.user_id].start_path.clear();
                         gui.users[emuenv.io.user_id].start_type = "theme";
                         init_theme_start_background(gui, emuenv, gui.users[emuenv.io.user_id].theme_id);
@@ -715,22 +661,13 @@ void draw_settings(GuiState &gui, EmuEnvState &emuenv) {
                             ? fs_utils::utf8_to_path(gui.users[emuenv.io.user_id].start_path)
                             : fs::path{};
 #ifdef __ANDROID__
-                        const fs::path image_dst_path = emuenv.pref_path / "ux0/user" / emuenv.io.user_id / "image" / image_path.filename();
-                        if (copy_file_from_host(image_path, image_dst_path))
-                            image_path = image_dst_path;
+                        image_path = host::dialog::filesystem::resolve_host_path(image_path);
 #endif
                         if (fs::exists(image_path) && init_user_start_background(gui, fs_utils::path_to_utf8(image_path))) {
                             gui.users[emuenv.io.user_id].start_path = fs_utils::path_to_utf8(image_path);
                             gui.users[emuenv.io.user_id].start_type = "image";
                             save_user(gui, emuenv, emuenv.io.user_id);
                         }
-#ifdef __ANDROID__
-                        // Remove old image if different
-                        if (!old_path.empty() && (old_path != image_path)) {
-                            fs::remove(old_path);
-                            LOG_INFO("Old start image removed: {}", old_path);
-                        }
-#endif
                     } else if (result == host::dialog::filesystem::Result::ERROR) {
                         LOG_CRITICAL("Error initializing file dialog: {}", host::dialog::filesystem::get_error());
                     }
@@ -743,9 +680,6 @@ void draw_settings(GuiState &gui, EmuEnvState &emuenv) {
                     }
                     ImGui::SetCursorPos(SELECT_BUTTON_POS);
                     if ((gui.users[emuenv.io.user_id].start_type != "default") && (ImGui::Button(select, BUTTON_SIZE) || ImGui::IsKeyPressed(static_cast<ImGuiKey>(emuenv.cfg.keyboard_button_cross)))) {
-#ifdef __ANDROID__
-                        remove_image(gui.users[emuenv.io.user_id].start_path);
-#endif
                         gui.users[emuenv.io.user_id].start_path.clear();
                         init_theme_start_background(gui, emuenv, "default");
                         gui.users[emuenv.io.user_id].start_type = "default";
@@ -761,10 +695,6 @@ void draw_settings(GuiState &gui, EmuEnvState &emuenv) {
 
             // Delete user background
             if (!delete_user_background.empty()) {
-#ifdef __ANDROID__
-                // Remove background image file if it exists
-                remove_image(delete_user_background);
-#endif
                 vector_utils::erase_first(gui.users[emuenv.io.user_id].backgrounds, delete_user_background);
                 gui.user_backgrounds.erase(delete_user_background);
                 gui.user_backgrounds_infos.erase(delete_user_background);
@@ -799,9 +729,7 @@ void draw_settings(GuiState &gui, EmuEnvState &emuenv) {
                 host::dialog::filesystem::Result result = host::dialog::filesystem::open_file(background_path, { { "Image file", { "bmp", "gif", "jpg", "jpeg", "png", "tif" } } });
                 if (result == host::dialog::filesystem::Result::SUCCESS) {
 #ifdef __ANDROID__
-                    const fs::path bg_dst_path = emuenv.pref_path / "ux0/user" / emuenv.io.user_id / "background" / background_path.filename();
-                    if (copy_file_from_host(background_path, bg_dst_path))
-                        background_path = bg_dst_path;
+                    background_path = host::dialog::filesystem::resolve_host_path(background_path);
 #endif
                     auto background_path_string = fs_utils::path_to_utf8(background_path);
 
